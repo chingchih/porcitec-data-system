@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>保飼佳數據查詢</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
+      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+      min-height: 100vh; padding: 12px;
+      color: #1b3a1b;
+    }
+    .header {
+      background: linear-gradient(135deg, #2e7d32, #1b5e20);
+      color: white; padding: 16px 20px;
+      border-radius: 12px; margin-bottom: 12px;
+      text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .header h1 { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+    .header p  { font-size: 12px; margin-top: 4px; opacity: 0.85; }
+    .card {
+      background: #fff; border-radius: 12px; padding: 16px;
+      margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .card-label {
+      font-size: 11px; font-weight: 700; color: #2e7d32;
+      text-transform: uppercase; letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .indicator-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .ind-btn {
+      background: #f1f8f2; border: 2px solid #c8e6c9;
+      border-radius: 8px; padding: 10px 6px;
+      text-align: center; cursor: pointer; font-size: 12px;
+      color: #1b3a1b; font-weight: 600;
+      transition: all 0.15s; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .ind-btn:active { background: #c8e6c9; transform: scale(0.97); }
+    .ind-btn.selected {
+      background: #2e7d32; color: white; border-color: #1b5e20;
+    }
+    .period-scroll {
+      display: flex; gap: 6px; overflow-x: auto;
+      padding-bottom: 4px; -webkit-overflow-scrolling: touch;
+    }
+    .period-scroll::-webkit-scrollbar { height: 4px; }
+    .period-scroll::-webkit-scrollbar-thumb { background: #c8e6c9; border-radius: 2px; }
+    .period-btn {
+      flex-shrink: 0; padding: 6px 12px; border-radius: 20px;
+      background: #f1f8f2; border: 2px solid #c8e6c9;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      color: #2e7d32; transition: all 0.15s;
+    }
+    .period-btn:active { background: #c8e6c9; }
+    .period-btn.selected { background: #2e7d32; color: white; border-color: #1b5e20; }
+    .period-btn.now     { border-color: #1b5e20; color: #1b5e20; }
+    .query-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #2e7d32, #1b5e20);
+      color: white; border: none; border-radius: 10px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      letter-spacing: 1px; box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+      transition: opacity 0.15s;
+    }
+    .query-btn:active { opacity: 0.8; }
+    .query-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .result-box {
+      background: #fff; border-radius: 12px; padding: 20px;
+      text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    .result-indicator { font-size: 13px; color: #666; margin-bottom: 4px; }
+    .result-period    { font-size: 13px; color: #999; margin-bottom: 12px; }
+    .result-value     { font-size: 48px; font-weight: 800;
+                        color: #2e7d32; letter-spacing: 1px; line-height: 1; }
+    .result-unit      { font-size: 13px; color: #2e7d32; font-weight: 600; margin-top: 6px; }
+    .trend-title { font-size: 13px; font-weight: 700; color: #2e7d32;
+                   margin: 14px 0 8px; text-align: left; }
+    .trend-row { display: flex; align-items: center; gap: 6px;
+                 margin-bottom: 4px; font-size: 11px; }
+    .trend-label { width: 42px; text-align: right; color: #888; flex-shrink: 0;
+                   font-variant-numeric: tabular-nums; }
+    .trend-bar-wrap {
+      flex: 1; background: #f1f8f2; border-radius: 3px;
+      height: 16px; position: relative;
+    }
+    .trend-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #2e7d32, #66bb6a);
+      border-radius: 3px; min-width: 3px; transition: width 0.2s;
+    }
+    .trend-val {
+      width: 54px; text-align: right; font-weight: 600;
+      color: #1b3a1b; font-variant-numeric: tabular-nums;
+    }
+    #app { max-width: 420px; margin: 0 auto; }
+    .hidden { display: none !important; }
+    .error { color: #b71c1c; text-align: center; padding: 10px; font-size: 13px; }
+    .loading { text-align: center; padding: 30px; color: #888; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <h1>🐷 保飼佳數據查詢</h1>
+    <p>台灣豬場重點指標（2012 ~ 2026）</p>
+  </div>
+
+  <div class="card">
+    <div class="card-label">▌ 步驟 1｜選擇指標</div>
+    <div class="indicator-grid" id="indicator-grid"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">▌ 步驟 2｜選擇季度</div>
+    <div class="period-scroll" id="period-scroll"></div>
+  </div>
+
+  <button id="query-btn" class="query-btn">查詢結果 📊</button>
+
+  <div id="result-area" class="hidden">
+    <div class="result-box" style="margin-top:12px;">
+      <div class="result-indicator" id="res-indicator"></div>
+      <div class="result-period"    id="res-period"></div>
+      <div class="result-value"     id="res-value"></div>
+      <div class="result-unit"      id="res-unit"></div>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <div class="card-label">▌ 近 8 季趨勢</div>
+      <div class="trend-title" id="trend-title"></div>
+      <div id="trend-area"></div>
+    </div>
+  </div>
+
+  <div id="loading"   class="loading hidden">讀取資料中…</div>
+  <div id="error-msg" class="error"></div>
+</div>
+
+<script>
+const API_BASE = "";
+const LIFF_ID = "{{ liff_id }}";
+let allData = { periods: [], indicators: [], indicator_names: [] };
+let selectedIndicator = null;
+let selectedPeriod    = null;
+
+function norm(v) {
+  if (v == null) return null;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+async function ensureLiff() {
+  if (!LIFF_ID) return;
+  try { await liff.init({ liffId: LIFF_ID }); } catch (e) { console.log("LIFF init skipped:", e); }
+}
+
+async function loadAll() {
+  document.getElementById("loading").classList.remove("hidden");
+  try {
+    const res = await fetch(`${API_BASE}/api/all`);
+    allData = await res.json();
+    buildPeriodButtons();
+    buildIndicatorButtons();
+  } catch (e) {
+    setError("載入失敗：" + e.message);
+  }
+  document.getElementById("loading").classList.add("hidden");
+}
+
+function buildPeriodButtons() {
+  const wrap = document.getElementById("period-scroll");
+  wrap.innerHTML = "";
+  allData.periods.slice(-12).forEach(p => {
+    const b = document.createElement("button");
+    b.className = "period-btn" + (!/年平均/.test(p) ? " now" : "");
+    b.textContent = p;
+    b.onclick = () => {
+      document.querySelectorAll(".period-btn").forEach(x => x.classList.remove("selected"));
+      b.classList.add("selected");
+      selectedPeriod = p;
+    };
+    wrap.appendChild(b);
+  });
+}
+
+function buildIndicatorButtons() {
+  const grid = document.getElementById("indicator-grid");
+  grid.innerHTML = "";
+  allData.indicator_names.forEach(n => {
+    const b = document.createElement("div");
+    b.className = "ind-btn";
+    b.textContent = n;
+    b.onclick = () => {
+      document.querySelectorAll(".ind-btn").forEach(x => x.classList.remove("selected"));
+      b.classList.add("selected");
+      selectedIndicator = n;
+    };
+    grid.appendChild(b);
+  });
+}
+
+function unitFor(name) {
+  if (/(率|%)/.test(name)) return "%";
+  if (/(日)/.test(name))   return "日";
+  if (/(頭)/.test(name))   return "頭";
+  if (/(次)/.test(name))   return "次";
+  return "";
+}
+
+function fmt(v) {
+  if (v == null) return "無資料";
+  if (Number.isInteger(v)) return String(parseInt(v));
+  const s = parseFloat(v).toFixed(2);
+  return s.endsWith(".00") ? s.slice(0, -3) : s;
+}
+
+document.getElementById("query-btn").onclick = () => {
+  setError("");
+  if (!selectedIndicator || !selectedPeriod) return setError("請選擇指標與季度！");
+  const idx = allData.periods.indexOf(selectedPeriod);
+  if (idx < 0) return setError("找不到該季度");
+  const meta = allData.indicators.find(i => i.name === selectedIndicator);
+  const val  = meta ? meta.values[idx] : null;
+
+  document.getElementById("res-indicator").textContent = selectedIndicator;
+  document.getElementById("res-period").textContent    = selectedPeriod;
+  document.getElementById("res-value").textContent     = fmt(val);
+  document.getElementById("res-unit").textContent      = unitFor(selectedIndicator);
+
+  const start = Math.max(0, idx - 7);
+  const vals  = (meta ? meta.values : []).slice(start, idx + 1);
+  const ps    = allData.periods.slice(start, idx + 1);
+  const maxV  = Math.max(...vals.map(norm).filter(v => v !== null), 0.001);
+  document.getElementById("trend-title").textContent = selectedIndicator + " · 近" + vals.length + "季";
+
+  const area = document.getElementById("trend-area");
+  area.innerHTML = "";
+  vals.forEach((v, i) => {
+    const vv = norm(v);
+    const pct = maxV ? (vv / maxV * 100).toFixed(2) : "0";
+    const row = document.createElement("div");
+    row.className = "trend-row";
+    const lbl = (ps[i] || "").replace("年平均", "AVE");
+    row.innerHTML = `
+      <div class="trend-label">${lbl}</div>
+      <div class="trend-bar-wrap"><div class="trend-bar" style="width:${pct}%"></div></div>
+      <div class="trend-val">${vv != null ? fmt(v) : " —"}</div>
+    `;
+    area.appendChild(row);
+  });
+  document.getElementById("result-area").classList.remove("hidden");
+};
+
+function setError(msg) {
+  const el = document.getElementById("error-msg");
+  el.textContent = msg;
+  if (msg) setTimeout(() => setError(""), 4000);
+}
+
+ensureLiff().then(loadAll);
+</script>
+</body>
+</html>
